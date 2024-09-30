@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/http2"
 )
@@ -20,6 +22,7 @@ var (
 	h2         bool
 	h3         bool
 	remoteName bool
+	output     string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -54,14 +57,12 @@ func init() {
 	rootCmd.Flags().BoolVar(&h2, "http2", false, "Use HTTP 2")
 	rootCmd.Flags().BoolVar(&h3, "http3", false, "Use HTTP v3 only")
 	rootCmd.Flags().BoolVarP(&remoteName, "remote-name", "O", false, "Write output to a file named as the remote file")
+	rootCmd.Flags().StringVarP(&output, "output", "o", "", "Write to file instead of stdout")
 }
 
 func run(addresses ...string) {
-	client := &http.Client{
-		Transport: &http2.Transport{
-			TLSClientConfig: &tls.Config{},
-		},
-	}
+	client, cancel := getClient()
+	defer cancel()
 	for _, address := range addresses {
 		resp, err := client.Get(address)
 		if err != nil {
@@ -70,9 +71,14 @@ func run(addresses ...string) {
 		defer resp.Body.Close()
 		buffer := &bytes.Buffer{}
 		io.Copy(buffer, resp.Body)
-		if remoteName {
-			strs := strings.Split(address, "/")
-			fileName := strs[len(strs)-1]
+		if remoteName || output != "" {
+			var fileName string
+			if output != "" {
+				fileName = output
+			}else {
+				temp := strings.Split(address, "/")
+				fileName = temp[len(temp)-1]
+			}
 			file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 			if err != nil {
 				panic(err)
@@ -82,8 +88,33 @@ func run(addresses ...string) {
 			if err != nil {
 				panic(err)
 			}
+			fmt.Printf("complete writing >> %s\n", fileName)
 		} else {
 			fmt.Printf("%s\n", buffer.Bytes())
 		}
 	}
+}
+
+func getClient() (*http.Client, func()) {
+	client := &http.Client{}
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+	}
+	if h3 {
+		roundTripper := &http3.RoundTripper{
+			TLSClientConfig: tlsConfig,
+			QUICConfig:      &quic.Config{},
+		}
+		client.Transport = roundTripper
+		return client, func() { roundTripper.Close() }
+	} else if h2 {
+		client.Transport = &http2.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+		return client, func() {}
+	}
+	client.Transport = &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+	return client, func() {}
 }
