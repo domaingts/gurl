@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -76,7 +77,11 @@ func run(addresses ...string) {
 			if output != "" {
 				fileName = output
 			} else {
-				temp := strings.Split(address, "/")
+				u, err := url.Parse(address)
+				if err != nil {
+					panic(err)
+				}
+				temp := strings.Split(u.Path, "/")
 				fileName = temp[len(temp)-1]
 			}
 			file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
