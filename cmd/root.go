@@ -75,7 +75,7 @@ func run(addresses ...string) {
 			var fileName string
 			if output != "" {
 				fileName = output
-			}else {
+			} else {
 				temp := strings.Split(address, "/")
 				fileName = temp[len(temp)-1]
 			}
