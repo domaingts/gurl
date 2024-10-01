@@ -65,7 +65,11 @@ func run(addresses ...string) {
 	client, cancel := getClient()
 	defer cancel()
 	for _, address := range addresses {
-		resp, err := client.Get(address)
+		u, err := url.Parse(address)
+		if err != nil {
+			panic(err)
+		}
+		resp, err := client.Get(u.String())
 		if err != nil {
 			panic(err)
 		}
@@ -77,10 +81,6 @@ func run(addresses ...string) {
 			if output != "" {
 				fileName = output
 			} else {
-				u, err := url.Parse(address)
-				if err != nil {
-					panic(err)
-				}
 				temp := strings.Split(u.Path, "/")
 				fileName = temp[len(temp)-1]
 			}
